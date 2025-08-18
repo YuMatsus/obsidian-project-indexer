@@ -1,4 +1,4 @@
-import { App, TFile, Notice } from 'obsidian';
+import { App, TFile, TFolder, Notice } from 'obsidian';
 import { ProjectIndexerSettings } from './types';
 import * as utils from './utils';
 
@@ -25,14 +25,7 @@ export class ProjectIndexer {
 				return;
 			}
 
-			const projectIndexPath = await this.ensureProjectIndexFile(projectName);
-			const projectIndexFile = this.app.vault.getAbstractFileByPath(projectIndexPath) as TFile;
-			
-			if (!projectIndexFile) {
-				console.error('Failed to create project index file');
-				return;
-			}
-
+			const projectIndexFile = await this.ensureProjectIndexFile(projectName);
 			await this.updateProjectIndex(projectIndexFile, projectName);
 			new Notice(`Project index updated for: ${projectName}`);
 		} catch (error) {
@@ -40,23 +33,49 @@ export class ProjectIndexer {
 		}
 	}
 
-	private async ensureProjectIndexFile(projectName: string): Promise<string> {
+	private async ensureProjectIndexFile(projectName: string): Promise<TFile> {
 		const folderPath = this.settings.projectIndexFolder;
-		const folder = this.app.vault.getAbstractFileByPath(folderPath);
-		
-		if (!folder) {
-			await this.app.vault.createFolder(folderPath);
+		await this.ensureFolderExists(folderPath);
+
+		const indexPath = `${folderPath}/${this.toFileName(projectName)}.md`;
+		const indexAbstract = this.app.vault.getAbstractFileByPath(indexPath);
+
+		if (indexAbstract instanceof TFile) {
+			return indexAbstract;
 		}
-
-		const indexPath = `${folderPath}/${projectName}.md`;
-		const indexFile = this.app.vault.getAbstractFileByPath(indexPath) as TFile;
-
-		if (!indexFile) {
-			const initialContent = this.createInitialIndexContent(projectName);
-			await this.app.vault.create(indexPath, initialContent);
+		if (indexAbstract) {
+			throw new Error(`Index path exists and is not a file: ${indexPath}`);
 		}
+		const initialContent = this.createInitialIndexContent(projectName);
+		return await this.app.vault.create(indexPath, initialContent);
+	}
 
-		return indexPath;
+	// Creates all intermediate folders and ensures each segment is a folder.
+	private async ensureFolderExists(folderPath: string): Promise<void> {
+		if (!folderPath || !folderPath.trim()) {
+			throw new Error('Project index folder is not configured.');
+		}
+		const parts = folderPath.split('/').filter(Boolean);
+		let current = '';
+		for (const part of parts) {
+			current = current ? `${current}/${part}` : part;
+			const entry = this.app.vault.getAbstractFileByPath(current);
+			if (!entry) {
+				await this.app.vault.createFolder(current);
+			} else if (!(entry instanceof TFolder)) {
+				throw new Error(`Path exists and is not a folder: ${current}`);
+			}
+		}
+	}
+
+	// Sanitizes a project name to a safe filename (prevents nested paths/invalid chars).
+	private toFileName(name: string): string {
+		return name
+			.trim()
+			.replace(/[\/\\:*?"<>|]/g, '-') // strip invalid filename chars on common filesystems
+			.replace(/\s+/g, ' ')
+			.replace(/^\.+/, '') // avoid leading dots
+			.slice(0, 180); // conservative limit to avoid OS path length issues
 	}
 
 	private createInitialIndexContent(projectName: string): string {

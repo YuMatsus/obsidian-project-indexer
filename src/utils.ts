@@ -59,41 +59,28 @@ export function getSectionContent(content: string, headerText: string, level = 2
 export function replaceSectionContent(content: string, headerText: string, newContent: string[], level = 2): string {
 	const lines = content.split('\n');
 	const headerPrefix = '#'.repeat(level) + ' ';
-	let inSection = false;
-	const result: string[] = [];
 	let sectionStart = -1;
-	let sectionEnd = -1;
-	
+	let sectionEnd = lines.length;
+
 	for (let i = 0; i < lines.length; i++) {
-		const line = lines[i];
-		const trimmed = line.trim();
-		
-		if (trimmed === headerPrefix + headerText) {
-			inSection = true;
-			sectionStart = i;
-			result.push(line);
-			continue;
-		}
-		
-		if (inSection) {
+		const trimmed = lines[i].trim();
+		if (sectionStart === -1) {
+			if (trimmed === headerPrefix + headerText) {
+				sectionStart = i;
+			}
+		} else {
 			if (trimmed.startsWith('#') && !trimmed.startsWith('#'.repeat(level + 1))) {
 				sectionEnd = i;
-				inSection = false;
+				break;
 			}
 		}
-		
-		if (!inSection || sectionEnd !== -1) {
-			result.push(line);
-		}
 	}
-	
-	if (sectionStart !== -1) {
-		const before = result.slice(0, sectionStart + 1);
-		const after = sectionEnd !== -1 ? result.slice(sectionEnd) : [];
-		return [...before, ...newContent, ...after].join('\n');
-	}
-	
-	return content;
+
+	if (sectionStart === -1) return content;
+
+	const before = lines.slice(0, sectionStart + 1);
+	const after = sectionEnd < lines.length ? lines.slice(sectionEnd) : [];
+	return [...before, ...newContent, ...after].join('\n');
 }
 
 export function createTable(headers: string[], rows: string[][], alignments?: string[]): string[] {
