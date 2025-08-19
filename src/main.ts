@@ -23,6 +23,17 @@ export default class ProjectIndexerPlugin extends Plugin {
 			}
 		});
 
+		this.addCommand({
+			id: 'update-project-index',
+			name: 'Update project index for current note',
+			editorCallback: async (editor, view) => {
+				const file = view.file;
+				if (file) {
+					await this.indexer.updateProjectIndexForFile(file);
+				}
+			}
+		});
+
 		this.addSettingTab(new ProjectIndexerSettingTab(this.app, this));
 	}
 

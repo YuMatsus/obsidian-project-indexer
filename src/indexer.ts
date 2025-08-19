@@ -36,6 +36,36 @@ export class ProjectIndexer {
 		}
 	}
 
+	async updateProjectIndexForFile(currentFile: TFile): Promise<void> {
+		try {
+			const metadata = this.app.metadataCache.getFileCache(currentFile);
+			if (!metadata?.frontmatter) {
+				new Notice('Current note has no frontmatter');
+				return;
+			}
+
+			const projectName = metadata.frontmatter.project;
+			if (!projectName) {
+				new Notice('Current note has no "project" field in frontmatter');
+				return;
+			}
+
+			const projectIndexPath = `${this.settings.projectIndexFolder}/${this.toFileName(projectName)}.md`;
+			const projectIndexFile = this.app.vault.getAbstractFileByPath(projectIndexPath);
+			
+			if (!projectIndexFile || !(projectIndexFile instanceof TFile)) {
+				new Notice(`Project index file not found for: ${projectName}. Use "Create project index" command first.`);
+				return;
+			}
+
+			await this.updateProjectIndex(projectIndexFile, projectName);
+			new Notice(`Project index updated for: ${projectName}`);
+		} catch (error) {
+			console.error('Error updating project index:', error);
+			new Notice('Failed to update project index');
+		}
+	}
+
 	private async ensureProjectIndexFile(projectName: string): Promise<TFile> {
 		const folderPath = this.settings.projectIndexFolder;
 		await this.ensureFolderExists(folderPath);
