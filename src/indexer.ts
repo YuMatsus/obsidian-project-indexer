@@ -1,14 +1,17 @@
 import { App, TFile, TFolder, Notice } from 'obsidian';
 import { ProjectIndexerSettings } from './types';
 import * as utils from './utils';
+import { TemplateProcessor } from './templateProcessor';
 
 export class ProjectIndexer {
 	private app: App;
 	private settings: ProjectIndexerSettings;
+	private templateProcessor: TemplateProcessor;
 
 	constructor(app: App, settings: ProjectIndexerSettings) {
 		this.app = app;
 		this.settings = settings;
+		this.templateProcessor = new TemplateProcessor();
 	}
 
 	async createProjectIndex(currentFile: TFile): Promise<void> {
@@ -46,8 +49,18 @@ export class ProjectIndexer {
 		if (indexAbstract) {
 			throw new Error(`Index path exists and is not a file: ${indexPath}`);
 		}
-		const initialContent = this.createInitialIndexContent(projectName);
-		return await this.app.vault.create(indexPath, initialContent);
+		
+		// Get initial content - either from template or default
+		const initialContent = await this.getInitialContent(projectName);
+		const newFile = await this.app.vault.create(indexPath, initialContent);
+		
+		// Use Obsidian API to ensure required frontmatter
+		await this.app.fileManager.processFrontMatter(newFile, (frontmatter) => {
+			frontmatter.type = 'project_top';
+			frontmatter.project = projectName;
+		});
+		
+		return newFile;
 	}
 
 	// Creates all intermediate folders and ensures each segment is a folder.
@@ -72,17 +85,35 @@ export class ProjectIndexer {
 	private toFileName(name: string): string {
 		return name
 			.trim()
-			.replace(/[\/\\:*?"<>|]/g, '-') // strip invalid filename chars on common filesystems
+			.replace(/[/\\:*?"<>|]/g, '-') // strip invalid filename chars on common filesystems
 			.replace(/\s+/g, ' ')
 			.replace(/^\.+/, '') // avoid leading dots
 			.slice(0, 180); // conservative limit to avoid OS path length issues
+	}
+
+	private async getInitialContent(projectName: string): Promise<string> {
+		if (this.settings.useTemplate && this.settings.templatePath) {
+			// Try to use specified template
+			const templateFile = this.app.vault.getAbstractFileByPath(this.settings.templatePath);
+			if (templateFile instanceof TFile) {
+				const templateContent = await this.app.vault.read(templateFile);
+				return this.templateProcessor.processTemplateVariables(templateContent, projectName);
+			}
+		}
+		
+		// No template configured or template not found, use default
+		return this.createDefaultIndexContent(projectName);
+	}
+
+	private createDefaultIndexContent(projectName: string): string {
+		return this.createInitialIndexContent(projectName);
 	}
 
 	private createInitialIndexContent(projectName: string): string {
 		const lines: string[] = [];
 		
 		lines.push(`---`);
-		lines.push(`type: project_index`);
+		lines.push(`type: project_top`);
 		lines.push(`project: ${projectName}`);
 		lines.push(`---`);
 		lines.push('');
