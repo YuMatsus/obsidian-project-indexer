@@ -8,6 +8,7 @@ Automatically generate and maintain project index notes with customizable frontm
 - **Customizable Columns**: Configure which frontmatter fields appear as columns in the index table
 - **Organized Structure**: Project index files are created in a designated folder for better organization
 - **Table Management**: Automatically updates existing tables when regenerating the index
+- **Template Support**: Use custom templates for new project index files with variable substitution
 
 ## Installation
 
@@ -48,7 +49,7 @@ The generated project index will look like this:
 
 ```markdown
 ---
-type: project_index
+type: project_top
 project: MyProject
 ---
 
@@ -71,6 +72,24 @@ Access plugin settings via Settings → Project Indexer
 
 - **Project index folder**: Specify the folder where project index files will be created (default: `projects`)
 - **Frontmatter columns**: Comma-separated list of frontmatter fields to include as table columns (default: `status, priority`)
+
+### Template Settings
+
+- **Use template**: Enable to use custom templates when creating new project index files
+- **Template folder**: Select the folder containing your template files (optional)
+- **Default template**: Choose a default template file (leave empty to use default content)
+
+### Template Variables
+
+When using templates, the following variables are automatically replaced:
+
+- `{{title}}` - The project name
+- `{{date}}` - Current date (YYYY-MM-DD)
+- `{{time}}` - Current time (HH:mm)
+- `{{date:FORMAT}}` - Custom date format (e.g., `{{date:YYYY/MM/DD}}`)
+- `{{time:FORMAT}}` - Custom time format (e.g., `{{time:HH:mm:ss}}`)
+
+**Note**: The required frontmatter fields (`type: project_top` and `project: [project name]`) are automatically added regardless of template content.
 
 ## Development
 
