@@ -5,6 +5,7 @@ Automatically generate and maintain project index notes with customizable frontm
 ## Features
 
 - **Manual Project Index Generation**: Create project index notes with a single command from any note containing a `project` frontmatter field
+- **Update Existing Index**: Update project index tables without recreating the entire file
 - **Customizable Columns**: Configure which frontmatter fields appear as columns in the index table
 - **Organized Structure**: Project index files are created in a designated folder for better organization
 - **Table Management**: Automatically updates existing tables when regenerating the index
@@ -42,6 +43,14 @@ priority: high
 2. Run the command "Create project index from current note" from the Command Palette (Ctrl/Cmd + P)
 
 3. A project index file will be created at `<configured-folder>/MyProject.md` with a table containing all notes in that project
+
+### Updating Project Index
+
+To update an existing project index with the latest notes:
+
+1. Open any note that belongs to the project (has the same `project` field in frontmatter)
+2. Run the command "Update project index for current note" from the Command Palette
+3. The project index table will be refreshed with the current list of project notes
 
 ### Example Output
 
