@@ -40,6 +40,20 @@ export class ProjectIndexerSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
+		new Setting(containerEl)
+			.setName('Inherited frontmatter fields')
+			.setDesc('Comma-separated list of frontmatter fields to inherit when creating notes from templates')
+			.addText(text => text
+				.setPlaceholder('project, status')
+				.setValue(this.plugin.settings.inheritedFrontmatterFields.join(', '))
+				.onChange(async (value) => {
+					this.plugin.settings.inheritedFrontmatterFields = value
+						.split(',')
+						.map(field => field.trim())
+						.filter(field => field.length > 0);
+					await this.plugin.saveSettings();
+				}));
+
 		containerEl.createEl('h3', { text: 'Template Settings' });
 
 		new Setting(containerEl)

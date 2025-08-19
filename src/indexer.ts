@@ -127,7 +127,11 @@ export class ProjectIndexer {
 			const templateFile = this.app.vault.getAbstractFileByPath(this.settings.templatePath);
 			if (templateFile instanceof TFile) {
 				const templateContent = await this.app.vault.read(templateFile);
-				return this.templateProcessor.processTemplateVariables(templateContent, projectName);
+				// Pass project name as title variable for compatibility
+				return this.templateProcessor.processTemplateVariables(templateContent, { 
+					title: projectName,
+					project: projectName 
+				});
 			}
 		}
 		

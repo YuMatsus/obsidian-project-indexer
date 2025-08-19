@@ -4,6 +4,7 @@ export interface ProjectIndexerSettings {
 	useTemplate: boolean;
 	templateFolder: string;
 	templatePath: string;
+	inheritedFrontmatterFields: string[];
 }
 
 export const DEFAULT_SETTINGS: ProjectIndexerSettings = {
@@ -11,5 +12,6 @@ export const DEFAULT_SETTINGS: ProjectIndexerSettings = {
 	frontmatterColumns: ['status', 'priority'],
 	useTemplate: false,
 	templateFolder: 'templates',
-	templatePath: ''
+	templatePath: '',
+	inheritedFrontmatterFields: ['project']
 };
