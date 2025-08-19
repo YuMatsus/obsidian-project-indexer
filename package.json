@@ -1,6 +1,6 @@
 {
 	"name": "obsidian-project-indexer",
-	"version": "0.2.0",
+	"version": "0.3.0",
 	"description": "Automatically generate and maintain project index notes with customizable frontmatter columns",
 	"private": true,
 	"main": "main.js",
