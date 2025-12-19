@@ -1,6 +1,12 @@
-import { App, TFile, Notice, FuzzySuggestModal, Modal } from 'obsidian';
+import { App, TFile, Notice, FuzzySuggestModal } from 'obsidian';
 import { ProjectIndexerSettings } from './types';
 import { TemplateProcessor } from './templateProcessor';
+
+type AppWithCommands = App & {
+	commands: {
+		executeCommandById(id: string): boolean;
+	};
+};
 
 export class NoteCreator {
 	private app: App;
@@ -34,9 +40,10 @@ export class NoteCreator {
 				return;
 			}
 
-			// Prompt for file name
-			const fileName = await this.promptForFileName();
-			if (!fileName) {
+			// Create note using Obsidian's default "new note" command to inherit native behavior
+			const newFile = await this.createNoteUsingDefaultBehavior();
+			if (!newFile) {
+				new Notice('Failed to create new note');
 				return;
 			}
 
@@ -45,7 +52,7 @@ export class NoteCreator {
 
 			// Prepare variables for template processing
 			const templateVariables: Record<string, string> = {
-				title: fileName,
+				title: newFile.basename,
 				project: projectName
 			};
 			
@@ -58,12 +65,9 @@ export class NoteCreator {
 
 			// Process template variables (like {{title}}, {{date}}, etc.)
 			const processedContent = this.templateProcessor.processTemplateVariables(templateContent, templateVariables);
-
-			// Create new file path
-			const newFilePath = await this.getNewFilePath(fileName);
-
-			// Create new file with processed template content (including its original frontmatter)
-			const newFile = await this.app.vault.create(newFilePath, processedContent);
+			
+			// Replace the auto-created file contents with the processed template (frontmatter included)
+			await this.app.vault.modify(newFile, processedContent);
 
 			// Use Obsidian's processFrontMatter API to merge/inherit frontmatter fields
 			await this.app.fileManager.processFrontMatter(newFile, (frontmatter) => {
@@ -75,8 +79,6 @@ export class NoteCreator {
 				}
 			});
 
-			// Open the new file
-			await this.app.workspace.getLeaf().openFile(newFile);
 			new Notice(`Created new note from template: ${newFile.name}`);
 		} catch (error) {
 			console.error('Error creating note from template:', error);
@@ -97,43 +99,92 @@ export class NoteCreator {
 			).open();
 		});
 	}
-
-
-	private async promptForFileName(): Promise<string | null> {
-		return new Promise((resolve) => {
-			new FileNameModal(
-				this.app,
-				(fileName: string | null) => {
-					resolve(fileName);
-				}
-			).open();
-		});
-	}
-
-	private async getNewFilePath(fileName: string): Promise<string> {
-		// Sanitize file name
-		const sanitizedName = fileName.replace(/[\\/:*?"<>|]/g, '-');
+	private async createNoteUsingDefaultBehavior(): Promise<TFile | null> {
+		const commandIds = ['app:make-new-note', 'file-explorer:new-file'];
 		
-		// Get active file folder or root
-		const activeFile = this.app.workspace.getActiveFile();
-		const folder = activeFile ? activeFile.parent?.path || '' : '';
-		
-		// Add .md extension if not present
-		const fileNameWithExt = sanitizedName.endsWith('.md') ? sanitizedName : `${sanitizedName}.md`;
-		
-		// Create full path
-		const basePath = folder ? `${folder}/${fileNameWithExt}` : fileNameWithExt;
-		
-		// Check if file exists and add number if needed
-		let counter = 1;
-		let finalPath = basePath;
-		while (this.app.vault.getAbstractFileByPath(finalPath)) {
-			const nameWithoutExt = fileNameWithExt.slice(0, -3);
-			finalPath = folder ? `${folder}/${nameWithoutExt} ${counter}.md` : `${nameWithoutExt} ${counter}.md`;
-			counter++;
+		for (const commandId of commandIds) {
+			const file = await this.createNoteViaCommand(commandId);
+			if (file) {
+				return file;
+			}
 		}
 		
-		return finalPath;
+		return this.createNoteViaFallback();
+	}
+	
+	private async createNoteViaCommand(commandId: string): Promise<TFile | null> {
+		const commandManager = (this.app as Partial<AppWithCommands>).commands;
+		if (!commandManager?.executeCommandById) {
+			return null;
+		}
+		
+		return new Promise((resolve) => {
+			const previousFile = this.app.workspace.getActiveFile();
+			let timeoutId: number | undefined;
+			
+			const cleanup = () => {
+				this.app.workspace.off('file-open', handler);
+				if (timeoutId) {
+					window.clearTimeout(timeoutId);
+				}
+			};
+			
+			const handler = (file: TFile | null) => {
+				if (file && file !== previousFile) {
+					cleanup();
+					resolve(file);
+				}
+			};
+			
+			timeoutId = window.setTimeout(() => {
+				cleanup();
+				const activeFile = this.app.workspace.getActiveFile();
+				resolve(activeFile && activeFile !== previousFile ? activeFile : null);
+			}, 5000);
+			
+			this.app.workspace.on('file-open', handler);
+			const executed = commandManager.executeCommandById(commandId);
+			if (!executed) {
+				cleanup();
+				resolve(null);
+			}
+		});
+	}
+	
+	private async createNoteViaFallback(): Promise<TFile | null> {
+		try {
+			const activeFile = this.app.workspace.getActiveFile();
+			const sourcePath = activeFile?.path ?? '';
+			const parentFolder = this.app.fileManager.getNewFileParent(sourcePath);
+			const folderPath = parentFolder.path === '/' ? '' : parentFolder.path;
+			
+			const newFilePath = this.generateUntitledPath(folderPath);
+			const file = await this.app.vault.create(newFilePath, '');
+			
+			const leaf = this.app.workspace.getLeaf(false);
+			await leaf.openFile(file);
+			return file;
+		} catch (error) {
+			console.error('Fallback note creation failed', error);
+			return null;
+		}
+	}
+	
+	private generateUntitledPath(folderPath: string): string {
+		const baseName = 'Untitled';
+		let counter = 0;
+		
+		while (true) {
+			const suffix = counter === 0 ? '' : ` ${counter}`;
+			const candidateName = `${baseName}${suffix}.md`;
+			const candidatePath = folderPath ? `${folderPath}/${candidateName}` : candidateName;
+			
+			if (!this.app.vault.getAbstractFileByPath(candidatePath)) {
+				return candidatePath;
+			}
+			
+			counter++;
+		}
 	}
 }
 
@@ -175,90 +226,5 @@ class TemplateSelector extends FuzzySuggestModal<TFile> {
 				this.resolveCallback(null);
 			}
 		}, 0);
-	}
-}
-
-class FileNameModal extends Modal {
-	onChoose: (fileName: string | null) => void;
-	private customInputEl: HTMLInputElement;
-
-	constructor(app: App, onChoose: (fileName: string | null) => void) {
-		super(app);
-		this.onChoose = onChoose;
-	}
-
-	onOpen(): void {
-		const { contentEl } = this;
-		
-		contentEl.createEl('h3', { text: 'Create new note' });
-		
-		const inputContainer = contentEl.createDiv('input-container');
-		inputContainer.style.marginBottom = '1em';
-		
-		this.customInputEl = inputContainer.createEl('input', {
-			type: 'text',
-			placeholder: 'Enter file name...',
-		});
-		this.customInputEl.style.width = '100%';
-		this.customInputEl.style.padding = '0.5em';
-		
-		// Focus input after a short delay to ensure modal is fully opened
-		setTimeout(() => {
-			this.customInputEl.focus();
-		}, 10);
-		
-		// Handle enter key
-		this.customInputEl.addEventListener('keydown', (e) => {
-			if (e.key === 'Enter') {
-				e.preventDefault();
-				this.submitInput();
-			} else if (e.key === 'Escape') {
-				e.preventDefault();
-				this.onChoose(null);
-				this.close();
-			}
-		});
-		
-		// Create button container
-		const buttonContainer = contentEl.createDiv('modal-button-container');
-		buttonContainer.style.display = 'flex';
-		buttonContainer.style.justifyContent = 'flex-end';
-		buttonContainer.style.gap = '0.5em';
-		
-		// Cancel button
-		const cancelButton = buttonContainer.createEl('button', { text: 'Cancel' });
-		cancelButton.addEventListener('click', () => {
-			this.onChoose(null);
-			this.close();
-		});
-		
-		// Create button
-		const createButton = buttonContainer.createEl('button', { 
-			text: 'Create',
-			cls: 'mod-cta'
-		});
-		createButton.addEventListener('click', () => {
-			this.submitInput();
-		});
-	}
-
-	private submitInput(): void {
-		const value = this.customInputEl.value.trim();
-		if (value) {
-			this.onChoose(value);
-			this.close();
-		} else {
-			// Show error or focus input if empty
-			this.customInputEl.focus();
-			this.customInputEl.style.borderColor = 'var(--text-error)';
-			setTimeout(() => {
-				this.customInputEl.style.borderColor = '';
-			}, 2000);
-		}
-	}
-
-	onClose(): void {
-		const { contentEl } = this;
-		contentEl.empty();
 	}
 }
