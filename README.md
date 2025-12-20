@@ -61,8 +61,7 @@ To create a new note from a template within a project:
 1. Open the project_top file (project index file with `type: project_top` in frontmatter)
 2. Run the command "Create note from template (project top)" from the Command Palette
 3. Select a template from your template folder
-4. Enter a name for the new note
-5. The new note will be created with:
+4. The new note will be created with:
    - Template content with variables replaced
    - Inherited frontmatter fields from the project_top file
 
@@ -168,4 +167,3 @@ npm version major && git push --follow-tags
 ## License
 
 MIT
-
